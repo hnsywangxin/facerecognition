@@ -1,15 +1,17 @@
 #encoding:utf-8
-import os
 from datetime import datetime
-import time
 from image_signature import generate_signature
+from collections import Counter
+from elasticsearch import Elasticsearch
 
+es_index = "facerecognition"
+es = Elasticsearch("0.0.0.0", port=9200)
 class SignatureES(object):
     """Elasticsearch driver for image-match
 
     """
-
-    def __init__(self, es, index='face', doc_type='face', timeout='10s', size=1, distance_low=0.5, distance_high = 0.7):
+    size = 5
+    def __init__(self, es, index='face', doc_type='face', timeout='10s', size=size, distance_low=0.5, distance_high = 0.8):
         """Extra setup for Elasticsearch
 
         Args:
@@ -22,12 +24,12 @@ class SignatureES(object):
             **kwargs (Optional): Arbitrary keyword arguments to pass to base constructor
 
         Examples:
-            >>> from elasticsearch import Elasticsearch
-            >>> from image_match.elasticsearch_driver import SignatureES
-            >>> es = Elasticsearch()
-            >>> ses = SignatureES(es)
-            >>> ses.add_image('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg')
-            >>> ses.search_image('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg')
+            # >>> from elasticsearch import Elasticsearch
+            # >>> from image_match.elasticsearch_driver import SignatureES
+            # >>> es = Elasticsearch()
+            # >>> ses = SignatureES(es)
+            # >>> ses.add_image('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg')
+            # >>> ses.search_image('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg/687px-Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg')
             [
              {'dist': 0.0,
               'id': u'AVM37nMg0osmmAxpPvx6',
@@ -44,7 +46,7 @@ class SignatureES(object):
         self.distance_low = distance_low
         self.distance_high = distance_high
 
-    def make_record(self, img_path, signature, is_consume, username, facename):
+    def make_record(self, img_path, signature, is_consume,username, facename ):
         """Makes a record suitable for database insertion.
 
         Note:
@@ -73,7 +75,6 @@ class SignatureES(object):
         record = dict()
         # convert it to http format
         record['path'] = img_path
-
         sig_list = signature.tolist()
 
         sig_res = ''
@@ -91,48 +92,80 @@ class SignatureES(object):
 
         record['username'] = username
         record['facename'] = facename
-
         record['timestamp'] = cur_time
 
         return record
 
     def search_img(self, signature, username):
         sig_list = signature.tolist()
-        result = self.search_single_record(sig_list, username)
-
-        return result
+        searche_result = self.search_single_record(sig_list, username)
+        return searche_result
 
     def add_img(self, img_path, signature, is_consume, username, facename):
         rec = self.make_record(img_path, signature, is_consume, username, facename)
         self.insert_single_record(rec)
 
-    def update_img(self, id):
-        self.update_single_record(id)
+    def update_img(self, _id):
+        self.update_single_record(_id)
 
-    def query(self, img_path, coord, is_consume=False, username='unknown', facename='unknown'):
-        signature= generate_signature(img_path,coord)
+    def query(self, img_path, coord,facename, is_consume=False, username='weibo'):
+        signature,facename= generate_signature(img_path,coord,facename)
         search_result = self.search_img(signature, username)
-        #search_result_aligned = self.search_img(signature_aligned, username)
 
-        result = ''
         if len(search_result) != 0 :
-        # if len(search_result) != 0:
             score = search_result[0]['_score']
-            #score_aligned = search_result_aligned[0]['_score']
+            store_facename=search_result[0]['_source']['facename']
+            items_facename_pairs = []
+            item_only_name=[]
+            for i in xrange(0, len(search_result)):
+                facename_i, facename_i_score = search_result[i]['_source']['facename'], search_result[i]['_score']
+                items_facename_pairs.append((facename_i, facename_i_score))
+                item_only_name.append(facename_i)
+
+            counter = Counter(item_only_name)
+            N = counter.most_common()
+            idx = 0
+            while idx + 1 < len(N) and N[idx][1] == N[idx + 1][1]:
+                idx += 1
+            result_facename = []
+            c= 0
+            for c in range(idx + 1):
+                result_facename.append(N[c][0])
+                c += 1
+            if items_facename_pairs[0][0] in result_facename:
+                best_facename = items_facename_pairs[0][0]
+            else:
+                print("no find best_facename")
+
+            body = {
+                "query": {
+                    "bool": {
+                        "should": [{"term": {"facename": best_facename}}]
+                    }
+                }
+            }
+            cnt = es.count(body=body)['count']
+
             if is_consume and score > self.distance_high:
                 self.update_img(search_result[0]['_id'])
-                result = 'consume'
+                if cnt<6:
+                    self.add_img(img_path,signature,is_consume,username,store_facename)
+                    result = 'consume:' + store_facename
+
+                else:
+                    result = 'consume:' + store_facename
+                #result = 'consume:'+search_result[0]['_id']
+            elif not is_consume and score > self.distance_high:
+                if cnt<6:
+                    self.add_img(img_path,signature,not is_consume,username,store_facename)
+                    result = 'welcome:'+ store_facename
+                else:
+                    result = 'welcome:' + store_facename
             else:
-               result = 'come '
+               result = 'welcome'
         else:
-        #elif len(search_result) == 0 and len(search_result_aligned) == 0:
             self.add_img(img_path, signature, is_consume, username, facename)
             result = 'add'
-            #增加的图片效果不好导致检测上面检测的时候达不到阈值，如何选择图片效果好的图片上传？
-            #这里上传的都是第一张图片
-            #time.sleep(3)
-
-
         return result
 
     def search_single_record(self, signature, username):
@@ -166,7 +199,7 @@ class SignatureES(object):
                              doc_type=self.doc_type,
                              body=body,
                              size=self.size,
-                             _source_exclude=['signature', 'timestamp', 'facename'],
+                             _source_exclude=['signature', 'timestamp'],
                              timeout=self.timeout)
         res = es_res['hits']['hits']
 
@@ -175,32 +208,7 @@ class SignatureES(object):
     def insert_single_record(self, rec, refresh_after=False):
         self.es.index(index=self.index, doc_type=self.doc_type, body=rec, refresh=refresh_after)
 
-    def update_single_record(self, id):
-        self.es.update(index=self.index,doc_type=self.doc_type,id=id,
+    def update_single_record(self, _id):
+        self.es.update(index=self.index,doc_type=self.doc_type,id=_id,
                 body={"doc": {"consume_history": 1}})
 
-    def delete_duplicates(self, path):
-        """Delete all but one entries in elasticsearch whose `path` value is equivalent to that of path.
-           need to modify!!!
-        Args:
-            path (string): path value to compare to those in the elastic search
-        """
-        result = self.es.search(body={'query':
-                                 {'match':
-                                      {'path': path}
-                                  }
-                             },
-                       index=self.index)['hits']['hits']
-
-        matching_paths = []
-        matching_thumbnail = []
-        for item in result:
-            if item['_source']['path'] == path:
-                matching_paths.append(item['_id'])
-                matching_thumbnail.append(item['_source']['thumbnail'])
-
-        if len(matching_paths) > 0:
-            for i, id_tag in enumerate(matching_paths[1:]):
-                self.es.delete(index=self.index, doc_type=self.doc_type, id=id_tag)
-                if os.path.isfile(matching_thumbnail[i]):
-                    os.remove(matching_thumbnail[i])

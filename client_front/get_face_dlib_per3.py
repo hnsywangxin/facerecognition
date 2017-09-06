@@ -15,7 +15,7 @@ from scipy.misc import imsave
 
 from sftp_upload import sftp_upload
 
-output_dir = '/Users/ngxin/ngxin/facerecognition/client/my_faces'
+output_dir = '/Users/ngxin/ngxin/facerecognition/client_front/my_faces'
 
 # host = '121.69.75.194'  #
 # port = 22  # 端口
@@ -44,7 +44,10 @@ my_detector = faceLandmarkDetection(
     '/Users/ngxin/ngxin/facerecognition/server/model/shape_predictor_68_face_landmarks.dat')
 my_face_detector = dlib.get_frontal_face_detector()
 
-camera = cv2.VideoCapture(0)
+camera = cv2.VideoCapture(1)
+camera.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH,1280)
+camera.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT,720)
+
 index_frame = 0
 scale = 2
 font = cv2.FONT_HERSHEY_SIMPLEX
@@ -56,10 +59,9 @@ while True:
     frame, img = camera.read()
     size = img.shape
     cv2.imshow('face', img)
-    if (index_frame % 3 == 0):
+    if (index_frame % 8 == 0):
         text_list = []
         coord_list = []
-        #detector_score = []
 
         gray_img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         gray_img = cv2.resize(gray_img, (gray_img.shape[1]/scale, gray_img.shape[0]/scale))
@@ -80,7 +82,6 @@ while True:
             (-2.774015, -2.080775, 5.048531),
             (0.000000, -3.116408, 6.097667),
             (0.000000, -7.415691, 4.070434)])
-
         reprojectsrc = np.array([
             (10.0, 10.0, 10.0),
             (10.0, 10.0, -10.0),
@@ -108,6 +109,7 @@ while True:
 
             face = gray_img[y1:y2, x1:x2]
 
+            #detector_score = []
             #detector_score.append(detector_scores[i])
             cur_time = datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')
             mac_addr = get_mac_address()
@@ -156,7 +158,7 @@ while True:
                                                # "path_aligned": path_aligned,
                                                 "facename":cur_time[-12:],
                                                 "coord":[new_coor_x1,new_coor_y1,new_coor_x2,new_coor_y2],
-                                               "id": cur_time, "consume_history": "True"}]
+                                               "id": cur_time, "consume_history": "False"}]
                                   }
                 temp = json.dumps(message_search)
                 payloadfiles = {'files': temp}

@@ -17,9 +17,9 @@ with tf.Graph().as_default() as graph:
         embeddings = graph.get_tensor_by_name("embeddings:0")
         phase_train_placeholder = graph.get_tensor_by_name("phase_train:0")
 
-face_predictor_path = './model/shape_predictor_68_face_landmarks.dat'
-align = AlignDlib(face_predictor_path)
-landmarkIndices = AlignDlib.OUTER_EYES_AND_NOSE
+# face_predictor_path = './model/shape_predictor_68_face_landmarks.dat'
+# align = AlignDlib(face_predictor_path)
+# landmarkIndices = AlignDlib.OUTER_EYES_AND_NOSE
 
 def readimg(img_path):
     img = misc.imread(img_path, mode='RGB')
@@ -30,8 +30,10 @@ def readimg(img_path):
 
     return img
 
-def get_embedding(img_path, coord):
+def get_embedding(img_path, coord,facename):
     img = misc.imread(img_path, mode='RGB')
+    facename=facename
+
 
     # judge alignment
     #aligned = align.align(160, img, [0, 0, img.shape[1], img.shape[0]], landmarkIndices=landmarkIndices)
@@ -60,7 +62,7 @@ def get_embedding(img_path, coord):
     # emb_aligned = sess.run(embeddings, feed_dict=feed_dict_aligned)
 
     #return emb.ravel(), emb_aligned.ravel()
-    return emb.ravel()
+    return emb.ravel(),facename
 
 # # for test
 # import os

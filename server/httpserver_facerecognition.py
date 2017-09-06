@@ -48,7 +48,6 @@ if not es.indices.exists(es_index):
 
 ses = SignatureES(es, index=es_index)
 
-#@app.route('/query',methods=['GET', 'POST'])
 @app.route('/query',methods=['GET','POST'])
 def message_for_image_search():
 	if request.method == 'GET':
@@ -74,6 +73,7 @@ def message_for_image_search():
 		if 'pics' in result.keys() and (result['pics'] is not None) and (len(result['pics']) > 0):
 			for each_pic in result['pics']:
 				path = each_pic['path']
+				facename = each_pic['facename']
 				# path_aligned = each_pic['path_aligned']
 				coord = each_pic['coord']
 				pic_id = each_pic['id']
@@ -84,7 +84,7 @@ def message_for_image_search():
 				print path
 
 				try:
-					result = ses.query(path, coord, is_consume)
+					result = ses.query(path, coord,facename, is_consume)
 					#result = ses.query(path,  is_consume)
 					message_query[pic_id] = result
 				except Exception, e:

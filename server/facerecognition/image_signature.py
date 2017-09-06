@@ -1,7 +1,7 @@
 import numpy as np
 from feedforward import get_embedding
 
-def generate_signature(img_path, coord):
+def generate_signature(img_path, coord,facename):
     """Generates an image signature.
 
     Args:
@@ -12,17 +12,15 @@ def generate_signature(img_path, coord):
             (or n x n x 4 if diagonal_neighbors == False)
 
     Examples:
-        >>> from image_match.goldberg import ImageSignature
-        >>> gis = ImageSignature()
-        >>> gis.generate_signature('https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg')
+        # >>> from image_match.goldberg import ImageSignature
+        # >>> gis = ImageSignature()
+        # >>> gis.generate_signature('https://pixabay.com/static/uploads/photo/2012/11/28/08/56/mona-lisa-67506_960_720.jpg')
     """
     try:
-        #signature, signature_aligned = get_embedding(img_path, coord)
-        signature = get_embedding(img_path, coord)
+        signature,facename = get_embedding(img_path, coord,facename)
     except IOError:
         raise TypeError('Cannot predict image successfully.')
-    #return signature, signature_aligned
-    return signature
+    return signature,facename
 
 def normalized_distance(_a, _b):
     """Compute normalized distance between two points.
